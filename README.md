@@ -98,7 +98,3 @@ python main.py
 ---
 
 Hecho con 🐍 Python, ❤️ y Café.
-
-```
-
-```
