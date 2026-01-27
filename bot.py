@@ -24,77 +24,42 @@ CACHE_TTL_TEXTO = 300
 # --- MAPA DE ACTIVOS ---
 MAPA_ACTIVOS = {
     # Criptos
-    "BTC": "BTC-USD",
-    "BITCOIN": "BTC-USD",
-    "ETH": "ETH-USD",
-    "ETHEREUM": "ETH-USD",
-    "SOL": "SOL-USD",
-    "SOLANA": "SOL-USD",
-    "ADA": "ADA-USD",
-    "CARDANO": "ADA-USD",
+    "BTC": "BTC-USD", "BITCOIN": "BTC-USD",
+    "ETH": "ETH-USD", "ETHEREUM": "ETH-USD",
+    "SOL": "SOL-USD", "SOLANA": "SOL-USD",
+    "ADA": "ADA-USD", "CARDANO": "ADA-USD",
     "DOGE": "DOGE-USD",
+    
     # Índices y Forex
-    "IBEX": "^IBEX",
-    "IBEX35": "^IBEX",
-    "IBEX 35": "^IBEX",
-    "SP500": "^GSPC",
-    "S&P500": "^GSPC",
-    "S&P": "^GSPC",
-    "NASDAQ": "^IXIC",
-    "NDX": "^NDX",
-    "NASDAQ100": "^NDX",
-    "DOW": "^DJI",
-    "DOWJONES": "^DJI",
+    "IBEX": "^IBEX", "IBEX35": "^IBEX", "IBEX 35": "^IBEX",
+    "SP500": "^GSPC", "S&P500": "^GSPC", "S&P": "^GSPC",
+    "NASDAQ": "^IXIC", "NDX": "^NDX", "NASDAQ100": "^NDX",
+    "DOW": "^DJI", "DOWJONES": "^DJI",
     "VIX": "^VIX",
-    "ORO": "GC=F",
-    "GOLD": "GC=F",
-    "PLATA": "SI=F",
-    "SILVER": "SI=F",
-    "XAG": "SI=F",
-    "EUR": "EURUSD=X",
-    "DOLAR": "EURUSD=X",
-    "USD": "EURUSD=X",
+    "ORO": "GC=F", "GOLD": "GC=F",
+    "PLATA": "SI=F", "SILVER": "SI=F", "XAG": "SI=F",
+    "EUR": "EURUSD=X", "DOLAR": "EURUSD=X", "USD": "EURUSD=X",
+    
     # Empresas USA
-    "APPLE": "AAPL",
-    "MANZANA": "AAPL",
-    "AAPL": "AAPL",
-    "MICROSOFT": "MSFT",
-    "MSFT": "MSFT",
-    "GOOGLE": "GOOGL",
-    "ALPHABET": "GOOGL",
-    "GOOG": "GOOGL",
-    "AMAZON": "AMZN",
-    "AMZN": "AMZN",
-    "TESLA": "TSLA",
-    "TSLA": "TSLA",
-    "META": "META",
-    "FACEBOOK": "META",
-    "NETFLIX": "NFLX",
-    "NVIDIA": "NVDA",
-    "AMD": "AMD",
-    "INTEL": "INTC",
+    "APPLE": "AAPL", "MANZANA": "AAPL", "AAPL": "AAPL",
+    "MICROSOFT": "MSFT", "MSFT": "MSFT",
+    "GOOGLE": "GOOGL", "ALPHABET": "GOOGL", "GOOG": "GOOGL",
+    "AMAZON": "AMZN", "AMZN": "AMZN",
+    "TESLA": "TSLA", "TSLA": "TSLA",
+    "META": "META", "FACEBOOK": "META",
+    "NETFLIX": "NFLX", "NVIDIA": "NVDA", "AMD": "AMD", "INTEL": "INTC",
+    
     # Empresas España
-    "INDITEX": "ITX.MC",
-    "ZARA": "ITX.MC",
-    "ITX": "ITX.MC",
-    "BBVA": "BBVA.MC",
-    "SANTANDER": "SAN.MC",
-    "SAN": "SAN.MC",
-    "TELEFONICA": "TEF.MC",
-    "TEF": "TEF.MC",
-    "IBERDROLA": "IBE.MC",
-    "REPSOL": "REP.MC",
-    "CAIXABANK": "CABK.MC",
-    "AENA": "AENA.MC",
-    "ENDESA": "ELE.MC",
-    "NATURGY": "NTGY.MC",
-    "IAG": "IAG.MC",
+    "INDITEX": "ITX.MC", "ZARA": "ITX.MC", "ITX": "ITX.MC",
+    "BBVA": "BBVA.MC", "SANTANDER": "SAN.MC", "SAN": "SAN.MC",
+    "TELEFONICA": "TEF.MC", "TEF": "TEF.MC", "IBERDROLA": "IBE.MC",
+    "REPSOL": "REP.MC", "CAIXABANK": "CABK.MC", "AENA": "AENA.MC",
+    "ENDESA": "ELE.MC", "NATURGY": "NTGY.MC", "IAG": "IAG.MC"
 }
 
 # ==============================================================================
 # 🧠 CEREBRO ASÍNCRONO
 # ==============================================================================
-
 
 def _consultar_ia_sync(sistema, usuario):
     try:
@@ -119,35 +84,24 @@ def _consultar_ia_sync(sistema, usuario):
         if r.status_code == 200:
             texto = r.json().get("response", "").strip()
 
-            basura = [
-                "end of one possible answer",
-                "|>",
-                "SISTEMA:",
-                "INSTRUCCIÓN:",
-                "User:",
-                "Assistant:",
-            ]
+            basura = ["end of one possible answer", "|>", "SISTEMA:", "INSTRUCCIÓN:", "User:", "Assistant:"]
             for b in basura:
                 texto = texto.replace(b, "")
 
             match = re.search(r"<<<(.*?)>>>", texto + ">>>", re.DOTALL)
-            resultado = texto
+            resultado = texto 
             if match:
                 contenido = match.group(1).strip()
-                if contenido:
-                    resultado = contenido
+                if contenido: resultado = contenido
             elif "\n" in texto:
                 resultado = texto.split("\n")[-1]
 
-            return (
-                resultado.replace("<<<", "").replace(">>>", "").replace('"', "").strip()
-            )
+            return resultado.replace("<<<", "").replace(">>>", "").replace('"', "").strip()
 
         return "⚠️ Error IA."
     except Exception as e:
         print(f"❌ Error IA: {e}")
         return "⚠️ IA dormida."
-
 
 async def consultar_ia(sistema, usuario, usar_cache=False, clave_cache=None):
     if usar_cache and clave_cache:
@@ -160,15 +114,12 @@ async def consultar_ia(sistema, usuario, usar_cache=False, clave_cache=None):
 
     print(f"🤖 [IA] Prompt: {usuario}")
     loop = asyncio.get_running_loop()
-    respuesta = await loop.run_in_executor(
-        None, partial(_consultar_ia_sync, sistema, usuario)
-    )
+    respuesta = await loop.run_in_executor(None, partial(_consultar_ia_sync, sistema, usuario))
 
     if usar_cache and clave_cache and respuesta and "⚠️" not in respuesta:
         CACHE_DATOS[clave_cache] = (respuesta, time.time())
 
     return respuesta
-
 
 def _obtener_datos_sync(ticker):
     try:
@@ -185,12 +136,10 @@ def _obtener_datos_sync(ticker):
             "symbol": ticker,
             "precio": precio,
             "moneda": moneda,
-            "cambio": ((h["Close"].iloc[-1] - h["Open"].iloc[-1]) / h["Open"].iloc[-1])
-            * 100,
+            "cambio": ((h["Close"].iloc[-1] - h["Open"].iloc[-1]) / h["Open"].iloc[-1]) * 100,
         }
     except:
         return None
-
 
 async def obtener_datos(ticker):
     ahora = time.time()
@@ -208,47 +157,19 @@ async def obtener_datos(ticker):
         CACHE_DATOS[ticker] = (datos, ahora)
     return datos
 
-
 # ==============================================================================
 # 🛠️ UTILIDADES LÓGICAS
 # ==============================================================================
-
 
 async def es_termino_financiero(termino):
     try:
         term_upper = termino.upper()
         whitelist = [
-            "FOREX",
-            "BITCOIN",
-            "BTC",
-            "ETHEREUM",
-            "ETH",
-            "CRYPTO",
-            "CRIPTO",
-            "TRADING",
-            "INVERSION",
-            "BOLSA",
-            "NASDAQ",
-            "SP500",
-            "IBEX",
-            "DINERO",
-            "DOLAR",
-            "EURO",
-            "ORO",
-            "ETF",
-            "FUTURO",
-            "OPCION",
-            "DIVISA",
-            "BANCO",
-            "INTERES",
-            "DEUDA",
-            "AHORRO",
-            "ACCION",
-            "CALL",
-            "PUT",
-            "WARRANT",
-            "BONO",
-            "LETRA",
+            "FOREX", "BITCOIN", "BTC", "ETHEREUM", "ETH", "CRYPTO", "CRIPTO",
+            "TRADING", "INVERSION", "BOLSA", "NASDAQ", "SP500", "IBEX",
+            "DINERO", "DOLAR", "EURO", "ORO", "ETF", "FUTURO", "OPCION",
+            "DIVISA", "BANCO", "INTERES", "DEUDA", "AHORRO", "ACCION",
+            "CALL", "PUT", "WARRANT", "BONO", "LETRA"
         ]
 
         if any(w in term_upper for w in whitelist):
@@ -263,19 +184,15 @@ async def es_termino_financiero(termino):
         )
         res = await consultar_ia(sistema, f"Clasifica: '{termino}'")
 
-        if not res or "⚠️" in res:
-            return False
+        if not res or "⚠️" in res: return False
 
         es_financiero = "SI" in str(res).upper()
-        print(
-            f"🤖 [FILTRO IA] '{termino}' -> {res} -> {'Aceptado' if es_financiero else 'Rechazado'}"
-        )
+        print(f"🤖 [FILTRO IA] '{termino}' -> {res} -> {'Aceptado' if es_financiero else 'Rechazado'}")
         return es_financiero
 
     except Exception as e:
         print(f"❌ Error CRÍTICO en filtro: {e}")
         return False
-
 
 async def adivinar_ticker_ia(busqueda):
     sistema = (
@@ -289,41 +206,21 @@ async def adivinar_ticker_ia(busqueda):
     match = re.search(r"\b[A-Z0-9^.-]{2,10}\b", res.upper())
     return match.group(0) if match else None
 
-
 def limpiar_argumentos(lista_args, modo="estricto"):
     if modo == "estricto":
-        prohibidas = [
-            "EN",
-            "EUROS",
-            "EURO",
-            "DOLAR",
-            "DOLARES",
-            "EL",
-            "LA",
-            "DE",
-            "VS",
-            "CONTRA",
-            "QUE",
-            "ES",
-            "SON",
-            "Y",
-        ]
+        prohibidas = ["EN", "EUROS", "EURO", "DOLAR", "DOLARES", "EL", "LA", "DE", "VS", "CONTRA", "QUE", "ES", "SON", "Y"]
         return [arg for arg in lista_args if arg.upper() not in prohibidas]
     else:
         prohibidas = ["/EXPLICA", "POR", "FAVOR", "EXPLICA", "QUE", "ES"]
         return [arg for arg in lista_args if arg.upper() not in prohibidas]
 
-
 # ==============================================================================
-# 🔄 FLUJO DE VERIFICACIÓN (AÑADIDO SOPORTE PARA 'tnd')
+# 🔄 FLUJO DE VERIFICACIÓN
 # ==============================================================================
-
 
 async def verificar_y_ejecutar(update, context, accion, activo1, activo2=None):
     chat_id = update.effective_chat.id
-    await context.bot.send_chat_action(
-        chat_id=chat_id, action=constants.ChatAction.TYPING
-    )
+    await context.bot.send_chat_action(chat_id=chat_id, action=constants.ChatAction.TYPING)
 
     # 1. Búsqueda Directa
     t1_candidato = MAPA_ACTIVOS.get(activo1.upper(), activo1.upper())
@@ -334,15 +231,10 @@ async def verificar_y_ejecutar(update, context, accion, activo1, activo2=None):
         sugerencia = await adivinar_ticker_ia(activo1)
         if sugerencia and sugerencia != t1_candidato:
             extra = activo2 if accion == "cmp" else "0"
-            await pedir_confirmacion(
-                update, context, accion, activo1, sugerencia, extra_info=extra
-            )
+            await pedir_confirmacion(update, context, accion, activo1, sugerencia, extra_info=extra)
             return
         else:
-            await context.bot.send_message(
-                chat_id,
-                "❌ Lo siento, no encontré ese activo. Prueba con el Ticker exacto.",
-            )
+            await context.bot.send_message(chat_id, "❌ Lo siento, no encontré ese activo. Prueba con el Ticker exacto.")
             return
 
     # 3. Validar Activo 2 (Solo Comparar)
@@ -354,19 +246,10 @@ async def verificar_y_ejecutar(update, context, accion, activo1, activo2=None):
         if not d2:
             sugerencia = await adivinar_ticker_ia(activo2)
             if sugerencia and sugerencia != t2_candidato:
-                await pedir_confirmacion(
-                    update,
-                    context,
-                    "cmp_2",
-                    activo2,
-                    sugerencia,
-                    extra_info=d1["symbol"],
-                )
+                await pedir_confirmacion(update, context, "cmp_2", activo2, sugerencia, extra_info=d1["symbol"])
                 return
             else:
-                await context.bot.send_message(
-                    chat_id, "❌ Lo siento, no encontré el segundo activo."
-                )
+                await context.bot.send_message(chat_id, "❌ Lo siento, no encontré el segundo activo.")
                 return
 
     # 4. Ejecución final
@@ -377,20 +260,15 @@ async def verificar_y_ejecutar(update, context, accion, activo1, activo2=None):
     elif accion == "tnd":
         await mostrar_tendencia(chat_id, context, d1)
 
-
-async def pedir_confirmacion(
-    update, context, accion, input_user, sugerencia, extra_info="0"
-):
+async def pedir_confirmacion(update, context, accion, input_user, sugerencia, extra_info="0"):
     texto = f"🤔 No encontré <b>{html.escape(input_user)}</b>.\n¿Te refieres a <b>{html.escape(sugerencia)}</b>?"
     payload_si = f"conf|{accion}|{sugerencia}|{extra_info}"
     payload_no = "conf|cancel|0|0"
 
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Sí", callback_data=payload_si),
-            InlineKeyboardButton("❌ No", callback_data=payload_no),
-        ]
-    ]
+    keyboard = [[
+        InlineKeyboardButton("✅ Sí", callback_data=payload_si),
+        InlineKeyboardButton("❌ No", callback_data=payload_no),
+    ]]
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=texto,
@@ -398,16 +276,12 @@ async def pedir_confirmacion(
         parse_mode="HTML",
     )
 
-
 # ==============================================================================
-# 📢 RESPUESTAS (NUEVO: mostrar_tendencia)
+# 📢 RESPUESTAS
 # ==============================================================================
-
 
 async def mostrar_precio(chat_id, context, datos):
-    await context.bot.send_chat_action(
-        chat_id=chat_id, action=constants.ChatAction.TYPING
-    )
+    await context.bot.send_chat_action(chat_id=chat_id, action=constants.ChatAction.TYPING)
     prompt = (
         f"El activo {datos['symbol']} vale {datos['precio']:.2f}. Varió {datos['cambio']:.2f}%.\n"
         "Dame un comentario técnico de 1 frase.\n"
@@ -423,11 +297,8 @@ async def mostrar_precio(chat_id, context, datos):
     )
     await context.bot.send_message(chat_id=chat_id, text=txt, parse_mode="HTML")
 
-
 async def mostrar_comparativa(chat_id, context, d1, d2):
-    await context.bot.send_chat_action(
-        chat_id=chat_id, action=constants.ChatAction.TYPING
-    )
+    await context.bot.send_chat_action(chat_id=chat_id, action=constants.ChatAction.TYPING)
     prompt = (
         f"Compara {d1['symbol']} ({d1['cambio']:.2f}%) vs {d2['symbol']} ({d2['cambio']:.2f}%).\n"
         "¿Quién gana hoy? Max 15 palabras.\n"
@@ -443,36 +314,26 @@ async def mostrar_comparativa(chat_id, context, d1, d2):
     )
     await context.bot.send_message(chat_id=chat_id, text=txt, parse_mode="HTML")
 
-
 async def mostrar_tendencia(chat_id, context, datos):
-    await context.bot.send_chat_action(
-        chat_id=chat_id, action=constants.ChatAction.TYPING
-    )
-
-    # 1. LÓGICA MATEMÁTICA (Python decide, no la IA)
-    cambio = datos["cambio"]
+    await context.bot.send_chat_action(chat_id=chat_id, action=constants.ChatAction.TYPING)
+    
+    cambio = datos['cambio']
     if cambio > 0.05:
         sentimiento = "ALCISTA 🟢"
-        instruccion = "Explica brevemente por qué subir es bueno."
+        instruccion = "tendencia alcista"
     elif cambio < -0.05:
         sentimiento = "BAJISTA 🔴"
-        instruccion = "Menciona brevemente la cautela ante la caída."
+        instruccion = "tendencia bajista"
     else:
         sentimiento = "NEUTRO/LATERAL 🟡"
-        instruccion = "Indica que el mercado está indeciso."
+        instruccion = "mercado lateral o indeciso"
 
-    # 2. PROMPT GUIADO
-    # Le damos la respuesta masticada para que no alucine
     prompt = (
         f"Activo: {datos['symbol']}.\n"
-        f"Variación: {datos['cambio']:.2f}%.\n"
-        f"Tendencia Técnica: {sentimiento}.\n"
-        f"Instrucción: Escribe una frase de estilo analista financiero confirmando que la tendencia es {sentimiento}.\n"
+        f"Variación: {datos['cambio']:.2f}% ({instruccion}).\n"
+        "Escribe una frase corta de analista confirmando el movimiento.\n"
         "Encierra la respuesta en: <<< TU FRASE >>>"
     )
-
-    # Subimos un pelín la temperatura (0.2) solo aquí para que no sea un robot repetitivo
-    # Nota: Tendrías que permitir pasar 'temp' a consultar_ia, pero con el prompt fuerte vale.
     analisis = await consultar_ia("Analista de Tendencias", prompt)
 
     txt = (
@@ -483,11 +344,9 @@ async def mostrar_tendencia(chat_id, context, datos):
     )
     await context.bot.send_message(chat_id=chat_id, text=txt, parse_mode="HTML")
 
-
 # ==============================================================================
 # 🎮 MANEJADOR DE EVENTOS
 # ==============================================================================
-
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -495,9 +354,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     chat_id = query.message.chat_id
 
-    await context.bot.send_chat_action(
-        chat_id=chat_id, action=constants.ChatAction.TYPING
-    )
+    await context.bot.send_chat_action(chat_id=chat_id, action=constants.ChatAction.TYPING)
 
     if data.startswith("conf|"):
         _, accion, sugerencia, extra = data.split("|")
@@ -507,48 +364,40 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id, "❌ Operación cancelada.")
             return
 
-        # Recuperar datos confirmados
         if accion == "prc":
             d = await obtener_datos(sugerencia)
-            if d:
-                await mostrar_precio(chat_id, context, d)
-            else:
-                await context.bot.send_message(chat_id, "❌ Error de datos.")
-
-        elif accion == "tnd":  # NUEVO: Manejo de tendencia confirmada
+            if d: await mostrar_precio(chat_id, context, d)
+            else: await context.bot.send_message(chat_id, "❌ Error de datos.")
+        
+        elif accion == "tnd":
             d = await obtener_datos(sugerencia)
-            if d:
-                await mostrar_tendencia(chat_id, context, d)
-            else:
-                await context.bot.send_message(chat_id, "❌ Error de datos.")
+            if d: await mostrar_tendencia(chat_id, context, d)
+            else: await context.bot.send_message(chat_id, "❌ Error de datos.")
 
         elif accion == "cmp":
             await verificar_y_ejecutar(update, context, "cmp", sugerencia, extra)
-
+        
         elif accion == "cmp_2":
             d1 = await obtener_datos(extra)
             d2 = await obtener_datos(sugerencia)
-            if d1 and d2:
-                await mostrar_comparativa(chat_id, context, d1, d2)
-            else:
-                await context.bot.send_message(chat_id, "❌ Error de datos.")
+            if d1 and d2: await mostrar_comparativa(chat_id, context, d1, d2)
+            else: await context.bot.send_message(chat_id, "❌ Error de datos.")
         return
 
     if data.startswith("precio_"):
         await verificar_y_ejecutar(update, context, "prc", data.split("_")[1])
     elif data == "tendencia":
-        # Botón por defecto del menú: S&P500
         await verificar_y_ejecutar(update, context, "tnd", "^GSPC")
+    elif data == "invertir_btn":
+        await como_invertir(update, context)
     elif data == "ayuda":
         await ayuda(update, context)
     elif data == "explica_btn":
         await context.bot.send_message(chat_id, "ℹ️ Ej: `/explica Pignoracion`")
 
-
 # ==============================================================================
 # 🎮 COMANDOS
 # ==============================================================================
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = (
@@ -557,72 +406,48 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ <b>Menú Principal:</b>"
     )
     kb = [
-        [
-            InlineKeyboardButton("💰 Bitcoin", callback_data="precio_BTC"),
-            InlineKeyboardButton("🇪🇸 Ibex 35", callback_data="precio_IBEX"),
-        ],
-        [
-            InlineKeyboardButton("🔮 S&P500", callback_data="tendencia"),
-            InlineKeyboardButton("📖 Aprender", callback_data="explica_btn"),
-        ],
-        [InlineKeyboardButton("❓ Ayuda", callback_data="ayuda")],
+        [InlineKeyboardButton("💰 Bitcoin", callback_data="precio_BTC"), InlineKeyboardButton("🇪🇸 Ibex 35", callback_data="precio_IBEX")],
+        [InlineKeyboardButton("🔮 S&P500", callback_data="tendencia"), InlineKeyboardButton("📖 Aprender", callback_data="explica_btn")],
+        [InlineKeyboardButton("🌱 Invertir", callback_data="invertir_btn"), InlineKeyboardButton("❓ Ayuda", callback_data="ayuda")],
     ]
     if update.callback_query:
         await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=texto,
-            reply_markup=InlineKeyboardMarkup(kb),
-            parse_mode="HTML",
+            chat_id=update.effective_chat.id, text=texto, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
         )
     else:
         await update.message.reply_html(texto, reply_markup=InlineKeyboardMarkup(kb))
 
-
 async def precio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = limpiar_argumentos(context.args, modo="estricto")
     if not args:
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id, text="⚠️ Escribe: `/precio [activo]`"
-        )
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="⚠️ Escribe: `/precio [activo]`")
         return
     await verificar_y_ejecutar(update, context, "prc", " ".join(args))
-
 
 async def comparar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = limpiar_argumentos(context.args, modo="estricto")
     if len(args) < 2:
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id, text="⚠️ Uso: `/comparar [A] [B]`"
-        )
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="⚠️ Uso: `/comparar [A] [B]`")
         return
     await verificar_y_ejecutar(update, context, "cmp", args[0], args[1])
-
 
 async def explica(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     try:
         args = limpiar_argumentos(context.args, modo="laxo")
         if not args:
-            await context.bot.send_message(
-                chat_id=chat_id, text="⚠️ Uso: `/explica [término]`"
-            )
+            await context.bot.send_message(chat_id=chat_id, text="⚠️ Uso: `/explica [término]`")
             return
 
         termino = " ".join(args)
-        await context.bot.send_chat_action(
-            chat_id=chat_id, action=constants.ChatAction.TYPING
-        )
+        await context.bot.send_chat_action(chat_id=chat_id, action=constants.ChatAction.TYPING)
 
         es_fin = await es_termino_financiero(termino)
         if not es_fin:
-            await context.bot.send_message(
-                chat_id=chat_id, text="⛔ Ese término no parece financiero."
-            )
+            await context.bot.send_message(chat_id=chat_id, text="⛔ Ese término no parece financiero.")
             return
 
-        await context.bot.send_chat_action(
-            chat_id=chat_id, action=constants.ChatAction.TYPING
-        )
+        await context.bot.send_chat_action(chat_id=chat_id, action=constants.ChatAction.TYPING)
 
         sistema_profe = (
             "Eres un Profesor de Finanzas en Wall Street.\n"
@@ -632,15 +457,9 @@ async def explica(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "- Escribe la respuesta DENTRO de: <<< TU EXPLICACIÓN >>>"
         )
         clave_cache = f"EXPLICA_{termino.upper()}"
-        explicacion = await consultar_ia(
-            sistema_profe,
-            f"Define el término: '{termino}'",
-            usar_cache=True,
-            clave_cache=clave_cache,
-        )
+        explicacion = await consultar_ia(sistema_profe, f"Define el término: '{termino}'", usar_cache=True, clave_cache=clave_cache)
 
-        if not explicacion or "⚠️" in explicacion:
-            raise Exception("IA inválida")
+        if not explicacion or "⚠️" in explicacion: raise Exception("IA inválida")
 
         await context.bot.send_message(
             chat_id=chat_id,
@@ -649,45 +468,49 @@ async def explica(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except Exception as e:
         print(f"🔥 ERROR EN /EXPLICA: {e}")
-        await context.bot.send_message(
-            chat_id=chat_id, text="❌ Error interno. Inténtalo de nuevo."
-        )
-
+        await context.bot.send_message(chat_id=chat_id, text="❌ Error interno. Inténtalo de nuevo.")
 
 async def tendencia_logic(update, context):
-    # Se adapta para funcionar como comando y botón
-    chat_id = (
-        update.effective_chat.id if update.message else update.effective_message.chat_id
-    )
+    chat_id = update.effective_chat.id if update.message else update.effective_message.chat_id
     args = []
     if context.args:
         args = limpiar_argumentos(context.args, modo="estricto")
-
-    # Si hay argumentos (ej: /tendencia Bitcoin), buscamos eso
+    
     if args:
         activo = " ".join(args)
         await verificar_y_ejecutar(update, context, "tnd", activo)
     else:
-        # Si no hay argumentos, por defecto S&P500
         await verificar_y_ejecutar(update, context, "tnd", "^GSPC")
 
+# --- GUÍA BOGLEHEAD LARGA ---
+async def como_invertir(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = (
+        "🌱 <b>Guía Básica de Inversión (Filosofía Boglehead)</b>\n\n"
+        "1. <b>Largo Plazo:</b> La inversión es una maratón, no un sprint. El interés compuesto necesita tiempo.\n"
+        "2. <b>Diversificación:</b> <i>'No busques la aguja en el pajar, compra el pajar entero'</i>. Invierte en todo el mercado mundial.\n"
+        "3. <b>Bajos Costes:</b> Las comisiones se comen tu rentabilidad. Los Fondos Indexados o ETFs son ideales.\n\n"
+        "🧠 <b>¿Por dónde empiezo?</b>\n"
+        "La estrategia más recomendada es la <b>inversión pasiva indexada</b>: simple, barata y estadísticamente superior a intentar adivinar qué acción subirá.\n\n"
+        "📚 <b>La Biblia de la Inversión:</b>\n"
+        "Para profundizar, consulta la guía oficial de la comunidad española:\n"
+        "👉 <a href='https://bogleheads.es/guia/'>Guía Bogleheads España</a>"
+    )
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=txt, parse_mode="HTML", disable_web_page_preview=False)
 
 async def ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = (
         "🤖 <b>COMANDOS MANUEL BROKER</b>\n\n"
-        "• `/start` - Inicio\n"
-        "• `/precio` [activo] - Ver cotización\n"
-        "• `/comparar` [A] [B] - Duelo de activos\n"
-        "• `/explica` [termino] - Diccionario\n"
-        "• `/tendencia` [activo] - Sentimiento de mercado"
+        "• <code>/start</code> - Inicio\n"
+        "• <code>/precio</code> [activo] - Ver cotización\n"
+        "• <code>/comparar</code> [A] [B] - Duelo de activos\n"
+        "• <code>/explica</code> [termino] - Diccionario\n"
+        "• <code>/tendencia</code> [activo] - Sentimiento\n"
+        "• <code>/como_invertir</code> - Guía básica Bogleheads"
     )
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, text=txt, parse_mode="HTML"
-    )
-
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=txt, parse_mode="HTML")
 
 def main():
-    print("🚀 Bot Iniciado (FINAL COMPLETO)...")
+    print("🚀 Bot Iniciado (FINAL DEFINITIVO + TEXTO EXTENDIDO)...")
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -695,11 +518,11 @@ def main():
     app.add_handler(CommandHandler("comparar", comparar))
     app.add_handler(CommandHandler("tendencia", tendencia_logic))
     app.add_handler(CommandHandler("explica", explica))
+    app.add_handler(CommandHandler("como_invertir", como_invertir))
     app.add_handler(CommandHandler("ayuda", ayuda))
     app.add_handler(CallbackQueryHandler(button_handler))
 
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
