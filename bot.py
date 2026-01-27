@@ -1,0 +1,705 @@
+import os
+import re
+import time
+import asyncio
+import requests
+import html
+import yfinance as yf
+from functools import partial
+from dotenv import load_dotenv
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, constants
+from telegram.ext import Application, CommandHandler, ContextTypes, CallbackQueryHandler
+
+# --- CONFIGURACIÓN ---
+load_dotenv()
+TOKEN = os.getenv("MANUELBROKER_TOKEN")
+OLLAMA_URL = "http://localhost:11434/api/generate"
+MODELO = "phi3:mini"
+
+# --- CACHÉ ---
+CACHE_DATOS = {}
+CACHE_TTL_DATOS = 60
+CACHE_TTL_TEXTO = 300
+
+# --- MAPA DE ACTIVOS ---
+MAPA_ACTIVOS = {
+    # Criptos
+    "BTC": "BTC-USD",
+    "BITCOIN": "BTC-USD",
+    "ETH": "ETH-USD",
+    "ETHEREUM": "ETH-USD",
+    "SOL": "SOL-USD",
+    "SOLANA": "SOL-USD",
+    "ADA": "ADA-USD",
+    "CARDANO": "ADA-USD",
+    "DOGE": "DOGE-USD",
+    # Índices y Forex
+    "IBEX": "^IBEX",
+    "IBEX35": "^IBEX",
+    "IBEX 35": "^IBEX",
+    "SP500": "^GSPC",
+    "S&P500": "^GSPC",
+    "S&P": "^GSPC",
+    "NASDAQ": "^IXIC",
+    "NDX": "^NDX",
+    "NASDAQ100": "^NDX",
+    "DOW": "^DJI",
+    "DOWJONES": "^DJI",
+    "VIX": "^VIX",
+    "ORO": "GC=F",
+    "GOLD": "GC=F",
+    "PLATA": "SI=F",
+    "SILVER": "SI=F",
+    "XAG": "SI=F",
+    "EUR": "EURUSD=X",
+    "DOLAR": "EURUSD=X",
+    "USD": "EURUSD=X",
+    # Empresas USA
+    "APPLE": "AAPL",
+    "MANZANA": "AAPL",
+    "AAPL": "AAPL",
+    "MICROSOFT": "MSFT",
+    "MSFT": "MSFT",
+    "GOOGLE": "GOOGL",
+    "ALPHABET": "GOOGL",
+    "GOOG": "GOOGL",
+    "AMAZON": "AMZN",
+    "AMZN": "AMZN",
+    "TESLA": "TSLA",
+    "TSLA": "TSLA",
+    "META": "META",
+    "FACEBOOK": "META",
+    "NETFLIX": "NFLX",
+    "NVIDIA": "NVDA",
+    "AMD": "AMD",
+    "INTEL": "INTC",
+    # Empresas España
+    "INDITEX": "ITX.MC",
+    "ZARA": "ITX.MC",
+    "ITX": "ITX.MC",
+    "BBVA": "BBVA.MC",
+    "SANTANDER": "SAN.MC",
+    "SAN": "SAN.MC",
+    "TELEFONICA": "TEF.MC",
+    "TEF": "TEF.MC",
+    "IBERDROLA": "IBE.MC",
+    "REPSOL": "REP.MC",
+    "CAIXABANK": "CABK.MC",
+    "AENA": "AENA.MC",
+    "ENDESA": "ELE.MC",
+    "NATURGY": "NTGY.MC",
+    "IAG": "IAG.MC",
+}
+
+# ==============================================================================
+# 🧠 CEREBRO ASÍNCRONO
+# ==============================================================================
+
+
+def _consultar_ia_sync(sistema, usuario):
+    try:
+        prompt_final = (
+            f"{sistema}\n"
+            f"USUARIO: {usuario}\n"
+            "INSTRUCCIÓN: Responde DENTRO de <<< >>>.\n"
+            "RESPUESTA:"
+        )
+
+        payload = {
+            "model": MODELO,
+            "prompt": prompt_final,
+            "stream": False,
+            "options": {
+                "temperature": 0.0,
+                "stop": [">>>", "User:", "SISTEMA:", "INSTRUCCIÓN:"],
+            },
+        }
+        r = requests.post(OLLAMA_URL, json=payload, timeout=120)
+
+        if r.status_code == 200:
+            texto = r.json().get("response", "").strip()
+
+            basura = [
+                "end of one possible answer",
+                "|>",
+                "SISTEMA:",
+                "INSTRUCCIÓN:",
+                "User:",
+                "Assistant:",
+            ]
+            for b in basura:
+                texto = texto.replace(b, "")
+
+            match = re.search(r"<<<(.*?)>>>", texto + ">>>", re.DOTALL)
+            resultado = texto
+            if match:
+                contenido = match.group(1).strip()
+                if contenido:
+                    resultado = contenido
+            elif "\n" in texto:
+                resultado = texto.split("\n")[-1]
+
+            return (
+                resultado.replace("<<<", "").replace(">>>", "").replace('"', "").strip()
+            )
+
+        return "⚠️ Error IA."
+    except Exception as e:
+        print(f"❌ Error IA: {e}")
+        return "⚠️ IA dormida."
+
+
+async def consultar_ia(sistema, usuario, usar_cache=False, clave_cache=None):
+    if usar_cache and clave_cache:
+        ahora = time.time()
+        if clave_cache in CACHE_DATOS:
+            res, timestamp = CACHE_DATOS[clave_cache]
+            if ahora - timestamp < CACHE_TTL_TEXTO:
+                print(f"⚡ [CACHE] Texto recuperado: {clave_cache}")
+                return res
+
+    print(f"🤖 [IA] Prompt: {usuario}")
+    loop = asyncio.get_running_loop()
+    respuesta = await loop.run_in_executor(
+        None, partial(_consultar_ia_sync, sistema, usuario)
+    )
+
+    if usar_cache and clave_cache and respuesta and "⚠️" not in respuesta:
+        CACHE_DATOS[clave_cache] = (respuesta, time.time())
+
+    return respuesta
+
+
+def _obtener_datos_sync(ticker):
+    try:
+        t = yf.Ticker(ticker)
+        h = t.history(period="1d")
+        if h.empty:
+            return None
+
+        precio = h["Close"].iloc[-1]
+        es_euro = any(x in ticker for x in [".MC", ".DE", ".PA", "^IBEX", "EUR=X"])
+        moneda = "€" if es_euro else "$"
+
+        return {
+            "symbol": ticker,
+            "precio": precio,
+            "moneda": moneda,
+            "cambio": ((h["Close"].iloc[-1] - h["Open"].iloc[-1]) / h["Open"].iloc[-1])
+            * 100,
+        }
+    except:
+        return None
+
+
+async def obtener_datos(ticker):
+    ahora = time.time()
+    if ticker in CACHE_DATOS:
+        datos, timestamp = CACHE_DATOS[ticker]
+        if ahora - timestamp < CACHE_TTL_DATOS:
+            print(f"⚡ [CACHE] Sirviendo datos {ticker}")
+            return datos
+
+    print(f"📡 [YAHOO] Descargando {ticker}...")
+    loop = asyncio.get_running_loop()
+    datos = await loop.run_in_executor(None, _obtener_datos_sync, ticker)
+
+    if datos:
+        CACHE_DATOS[ticker] = (datos, ahora)
+    return datos
+
+
+# ==============================================================================
+# 🛠️ UTILIDADES LÓGICAS
+# ==============================================================================
+
+
+async def es_termino_financiero(termino):
+    try:
+        term_upper = termino.upper()
+        whitelist = [
+            "FOREX",
+            "BITCOIN",
+            "BTC",
+            "ETHEREUM",
+            "ETH",
+            "CRYPTO",
+            "CRIPTO",
+            "TRADING",
+            "INVERSION",
+            "BOLSA",
+            "NASDAQ",
+            "SP500",
+            "IBEX",
+            "DINERO",
+            "DOLAR",
+            "EURO",
+            "ORO",
+            "ETF",
+            "FUTURO",
+            "OPCION",
+            "DIVISA",
+            "BANCO",
+            "INTERES",
+            "DEUDA",
+            "AHORRO",
+            "ACCION",
+            "CALL",
+            "PUT",
+            "WARRANT",
+            "BONO",
+            "LETRA",
+        ]
+
+        if any(w in term_upper for w in whitelist):
+            print(f"✅ [FILTRO] '{termino}' aceptado por Lista Blanca.")
+            return True
+
+        sistema = (
+            "CLASIFICADOR DE TEMÁTICA.\n"
+            "Analiza si el término pertenece a: Finanzas, Bolsa, Criptos, Banca, Negocios.\n"
+            "SI pertenece -> Responde <<<SI>>>\n"
+            "SI es cocina, deportes, etc -> Responde <<<NO>>>"
+        )
+        res = await consultar_ia(sistema, f"Clasifica: '{termino}'")
+
+        if not res or "⚠️" in res:
+            return False
+
+        es_financiero = "SI" in str(res).upper()
+        print(
+            f"🤖 [FILTRO IA] '{termino}' -> {res} -> {'Aceptado' if es_financiero else 'Rechazado'}"
+        )
+        return es_financiero
+
+    except Exception as e:
+        print(f"❌ Error CRÍTICO en filtro: {e}")
+        return False
+
+
+async def adivinar_ticker_ia(busqueda):
+    sistema = (
+        "Experto Yahoo Finance. Corrige typos.\n"
+        "Apple -> AAPL (NO APPL, NO APPLE)\n"
+        "Amazon -> AMZN (NO AMZN-USD)\n"
+        "Inditex -> ITX.MC\n"
+        "Responde SOLO: <<<TICKER>>>."
+    )
+    res = await consultar_ia(sistema, f"Ticker de: {busqueda}")
+    match = re.search(r"\b[A-Z0-9^.-]{2,10}\b", res.upper())
+    return match.group(0) if match else None
+
+
+def limpiar_argumentos(lista_args, modo="estricto"):
+    if modo == "estricto":
+        prohibidas = [
+            "EN",
+            "EUROS",
+            "EURO",
+            "DOLAR",
+            "DOLARES",
+            "EL",
+            "LA",
+            "DE",
+            "VS",
+            "CONTRA",
+            "QUE",
+            "ES",
+            "SON",
+            "Y",
+        ]
+        return [arg for arg in lista_args if arg.upper() not in prohibidas]
+    else:
+        prohibidas = ["/EXPLICA", "POR", "FAVOR", "EXPLICA", "QUE", "ES"]
+        return [arg for arg in lista_args if arg.upper() not in prohibidas]
+
+
+# ==============================================================================
+# 🔄 FLUJO DE VERIFICACIÓN (AÑADIDO SOPORTE PARA 'tnd')
+# ==============================================================================
+
+
+async def verificar_y_ejecutar(update, context, accion, activo1, activo2=None):
+    chat_id = update.effective_chat.id
+    await context.bot.send_chat_action(
+        chat_id=chat_id, action=constants.ChatAction.TYPING
+    )
+
+    # 1. Búsqueda Directa
+    t1_candidato = MAPA_ACTIVOS.get(activo1.upper(), activo1.upper())
+    d1 = await obtener_datos(t1_candidato)
+
+    # 2. IA / Sugerencias
+    if not d1:
+        sugerencia = await adivinar_ticker_ia(activo1)
+        if sugerencia and sugerencia != t1_candidato:
+            extra = activo2 if accion == "cmp" else "0"
+            await pedir_confirmacion(
+                update, context, accion, activo1, sugerencia, extra_info=extra
+            )
+            return
+        else:
+            await context.bot.send_message(
+                chat_id,
+                "❌ Lo siento, no encontré ese activo. Prueba con el Ticker exacto.",
+            )
+            return
+
+    # 3. Validar Activo 2 (Solo Comparar)
+    d2 = None
+    if accion == "cmp" and activo2:
+        t2_candidato = MAPA_ACTIVOS.get(activo2.upper(), activo2.upper())
+        d2 = await obtener_datos(t2_candidato)
+
+        if not d2:
+            sugerencia = await adivinar_ticker_ia(activo2)
+            if sugerencia and sugerencia != t2_candidato:
+                await pedir_confirmacion(
+                    update,
+                    context,
+                    "cmp_2",
+                    activo2,
+                    sugerencia,
+                    extra_info=d1["symbol"],
+                )
+                return
+            else:
+                await context.bot.send_message(
+                    chat_id, "❌ Lo siento, no encontré el segundo activo."
+                )
+                return
+
+    # 4. Ejecución final
+    if accion == "prc":
+        await mostrar_precio(chat_id, context, d1)
+    elif accion == "cmp":
+        await mostrar_comparativa(chat_id, context, d1, d2)
+    elif accion == "tnd":
+        await mostrar_tendencia(chat_id, context, d1)
+
+
+async def pedir_confirmacion(
+    update, context, accion, input_user, sugerencia, extra_info="0"
+):
+    texto = f"🤔 No encontré <b>{html.escape(input_user)}</b>.\n¿Te refieres a <b>{html.escape(sugerencia)}</b>?"
+    payload_si = f"conf|{accion}|{sugerencia}|{extra_info}"
+    payload_no = "conf|cancel|0|0"
+
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Sí", callback_data=payload_si),
+            InlineKeyboardButton("❌ No", callback_data=payload_no),
+        ]
+    ]
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=texto,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML",
+    )
+
+
+# ==============================================================================
+# 📢 RESPUESTAS (NUEVO: mostrar_tendencia)
+# ==============================================================================
+
+
+async def mostrar_precio(chat_id, context, datos):
+    await context.bot.send_chat_action(
+        chat_id=chat_id, action=constants.ChatAction.TYPING
+    )
+    prompt = (
+        f"El activo {datos['symbol']} vale {datos['precio']:.2f}. Varió {datos['cambio']:.2f}%.\n"
+        "Dame un comentario técnico de 1 frase.\n"
+        "Encierra la respuesta en: <<< TU FRASE >>>"
+    )
+    ia_msg = await consultar_ia("Analista Breve", prompt)
+
+    txt = (
+        f"💰 <b>{datos['symbol']}</b>\n"
+        f"💵 Precio: <b>{datos['precio']:,.2f} {datos['moneda']}</b>\n"
+        f"📈 Var: <b>{datos['cambio']:+.2f}%</b>\n\n"
+        f"🤖 {html.escape(ia_msg)}"
+    )
+    await context.bot.send_message(chat_id=chat_id, text=txt, parse_mode="HTML")
+
+
+async def mostrar_comparativa(chat_id, context, d1, d2):
+    await context.bot.send_chat_action(
+        chat_id=chat_id, action=constants.ChatAction.TYPING
+    )
+    prompt = (
+        f"Compara {d1['symbol']} ({d1['cambio']:.2f}%) vs {d2['symbol']} ({d2['cambio']:.2f}%).\n"
+        "¿Quién gana hoy? Max 15 palabras.\n"
+        "Encierra la respuesta en: <<< TU RESPUESTA >>>"
+    )
+    conclusion = await consultar_ia("Juez Financiero", prompt)
+
+    txt = (
+        f"🥊 <b>VS</b>\n"
+        f"🔹 {d1['symbol']}: {d1['precio']:,.2f} {d1['moneda']} <b>({d1['cambio']:+.2f}%)</b>\n"
+        f"🔸 {d2['symbol']}: {d2['precio']:,.2f} {d2['moneda']} <b>({d2['cambio']:+.2f}%)</b>\n\n"
+        f"🏆 {html.escape(conclusion)}"
+    )
+    await context.bot.send_message(chat_id=chat_id, text=txt, parse_mode="HTML")
+
+
+async def mostrar_tendencia(chat_id, context, datos):
+    await context.bot.send_chat_action(
+        chat_id=chat_id, action=constants.ChatAction.TYPING
+    )
+
+    # 1. LÓGICA MATEMÁTICA (Python decide, no la IA)
+    cambio = datos["cambio"]
+    if cambio > 0.05:
+        sentimiento = "ALCISTA 🟢"
+        instruccion = "Explica brevemente por qué subir es bueno."
+    elif cambio < -0.05:
+        sentimiento = "BAJISTA 🔴"
+        instruccion = "Menciona brevemente la cautela ante la caída."
+    else:
+        sentimiento = "NEUTRO/LATERAL 🟡"
+        instruccion = "Indica que el mercado está indeciso."
+
+    # 2. PROMPT GUIADO
+    # Le damos la respuesta masticada para que no alucine
+    prompt = (
+        f"Activo: {datos['symbol']}.\n"
+        f"Variación: {datos['cambio']:.2f}%.\n"
+        f"Tendencia Técnica: {sentimiento}.\n"
+        f"Instrucción: Escribe una frase de estilo analista financiero confirmando que la tendencia es {sentimiento}.\n"
+        "Encierra la respuesta en: <<< TU FRASE >>>"
+    )
+
+    # Subimos un pelín la temperatura (0.2) solo aquí para que no sea un robot repetitivo
+    # Nota: Tendrías que permitir pasar 'temp' a consultar_ia, pero con el prompt fuerte vale.
+    analisis = await consultar_ia("Analista de Tendencias", prompt)
+
+    txt = (
+        f"🔮 <b>Tendencia: {datos['symbol']}</b>\n"
+        f"📊 Var Hoy: <b>{datos['cambio']:+.2f}%</b>\n"
+        f"🧭 Señal: <b>{sentimiento}</b>\n\n"
+        f"📉 {html.escape(analisis)}"
+    )
+    await context.bot.send_message(chat_id=chat_id, text=txt, parse_mode="HTML")
+
+
+# ==============================================================================
+# 🎮 MANEJADOR DE EVENTOS
+# ==============================================================================
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    chat_id = query.message.chat_id
+
+    await context.bot.send_chat_action(
+        chat_id=chat_id, action=constants.ChatAction.TYPING
+    )
+
+    if data.startswith("conf|"):
+        _, accion, sugerencia, extra = data.split("|")
+        await query.delete_message()
+
+        if accion == "cancel":
+            await context.bot.send_message(chat_id, "❌ Operación cancelada.")
+            return
+
+        # Recuperar datos confirmados
+        if accion == "prc":
+            d = await obtener_datos(sugerencia)
+            if d:
+                await mostrar_precio(chat_id, context, d)
+            else:
+                await context.bot.send_message(chat_id, "❌ Error de datos.")
+
+        elif accion == "tnd":  # NUEVO: Manejo de tendencia confirmada
+            d = await obtener_datos(sugerencia)
+            if d:
+                await mostrar_tendencia(chat_id, context, d)
+            else:
+                await context.bot.send_message(chat_id, "❌ Error de datos.")
+
+        elif accion == "cmp":
+            await verificar_y_ejecutar(update, context, "cmp", sugerencia, extra)
+
+        elif accion == "cmp_2":
+            d1 = await obtener_datos(extra)
+            d2 = await obtener_datos(sugerencia)
+            if d1 and d2:
+                await mostrar_comparativa(chat_id, context, d1, d2)
+            else:
+                await context.bot.send_message(chat_id, "❌ Error de datos.")
+        return
+
+    if data.startswith("precio_"):
+        await verificar_y_ejecutar(update, context, "prc", data.split("_")[1])
+    elif data == "tendencia":
+        # Botón por defecto del menú: S&P500
+        await verificar_y_ejecutar(update, context, "tnd", "^GSPC")
+    elif data == "ayuda":
+        await ayuda(update, context)
+    elif data == "explica_btn":
+        await context.bot.send_message(chat_id, "ℹ️ Ej: `/explica Pignoracion`")
+
+
+# ==============================================================================
+# 🎮 COMANDOS
+# ==============================================================================
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    texto = (
+        "¡Bienvenido a Manuel Broker! 👋\n\n"
+        "Toda la info financiera, sin complicaciones.\n\n"
+        "✨ <b>Menú Principal:</b>"
+    )
+    kb = [
+        [
+            InlineKeyboardButton("💰 Bitcoin", callback_data="precio_BTC"),
+            InlineKeyboardButton("🇪🇸 Ibex 35", callback_data="precio_IBEX"),
+        ],
+        [
+            InlineKeyboardButton("🔮 S&P500", callback_data="tendencia"),
+            InlineKeyboardButton("📖 Aprender", callback_data="explica_btn"),
+        ],
+        [InlineKeyboardButton("❓ Ayuda", callback_data="ayuda")],
+    ]
+    if update.callback_query:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=texto,
+            reply_markup=InlineKeyboardMarkup(kb),
+            parse_mode="HTML",
+        )
+    else:
+        await update.message.reply_html(texto, reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def precio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = limpiar_argumentos(context.args, modo="estricto")
+    if not args:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id, text="⚠️ Escribe: `/precio [activo]`"
+        )
+        return
+    await verificar_y_ejecutar(update, context, "prc", " ".join(args))
+
+
+async def comparar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = limpiar_argumentos(context.args, modo="estricto")
+    if len(args) < 2:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id, text="⚠️ Uso: `/comparar [A] [B]`"
+        )
+        return
+    await verificar_y_ejecutar(update, context, "cmp", args[0], args[1])
+
+
+async def explica(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    try:
+        args = limpiar_argumentos(context.args, modo="laxo")
+        if not args:
+            await context.bot.send_message(
+                chat_id=chat_id, text="⚠️ Uso: `/explica [término]`"
+            )
+            return
+
+        termino = " ".join(args)
+        await context.bot.send_chat_action(
+            chat_id=chat_id, action=constants.ChatAction.TYPING
+        )
+
+        es_fin = await es_termino_financiero(termino)
+        if not es_fin:
+            await context.bot.send_message(
+                chat_id=chat_id, text="⛔ Ese término no parece financiero."
+            )
+            return
+
+        await context.bot.send_chat_action(
+            chat_id=chat_id, action=constants.ChatAction.TYPING
+        )
+
+        sistema_profe = (
+            "Eres un Profesor de Finanzas en Wall Street.\n"
+            "TU TAREA: Definir el término solicitado de forma directa.\n"
+            "INSTRUCCIONES:\n"
+            "- Máximo 50 palabras.\n"
+            "- Escribe la respuesta DENTRO de: <<< TU EXPLICACIÓN >>>"
+        )
+        clave_cache = f"EXPLICA_{termino.upper()}"
+        explicacion = await consultar_ia(
+            sistema_profe,
+            f"Define el término: '{termino}'",
+            usar_cache=True,
+            clave_cache=clave_cache,
+        )
+
+        if not explicacion or "⚠️" in explicacion:
+            raise Exception("IA inválida")
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"📖 <b>{termino.title()} (Finanzas):</b>\n\n{html.escape(explicacion)}",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        print(f"🔥 ERROR EN /EXPLICA: {e}")
+        await context.bot.send_message(
+            chat_id=chat_id, text="❌ Error interno. Inténtalo de nuevo."
+        )
+
+
+async def tendencia_logic(update, context):
+    # Se adapta para funcionar como comando y botón
+    chat_id = (
+        update.effective_chat.id if update.message else update.effective_message.chat_id
+    )
+    args = []
+    if context.args:
+        args = limpiar_argumentos(context.args, modo="estricto")
+
+    # Si hay argumentos (ej: /tendencia Bitcoin), buscamos eso
+    if args:
+        activo = " ".join(args)
+        await verificar_y_ejecutar(update, context, "tnd", activo)
+    else:
+        # Si no hay argumentos, por defecto S&P500
+        await verificar_y_ejecutar(update, context, "tnd", "^GSPC")
+
+
+async def ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = (
+        "🤖 <b>COMANDOS MANUEL BROKER</b>\n\n"
+        "• `/start` - Inicio\n"
+        "• `/precio` [activo] - Ver cotización\n"
+        "• `/comparar` [A] [B] - Duelo de activos\n"
+        "• `/explica` [termino] - Diccionario\n"
+        "• `/tendencia` [activo] - Sentimiento de mercado"
+    )
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id, text=txt, parse_mode="HTML"
+    )
+
+
+def main():
+    print("🚀 Bot Iniciado (FINAL COMPLETO)...")
+    app = Application.builder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("precio", precio))
+    app.add_handler(CommandHandler("comparar", comparar))
+    app.add_handler(CommandHandler("tendencia", tendencia_logic))
+    app.add_handler(CommandHandler("explica", explica))
+    app.add_handler(CommandHandler("ayuda", ayuda))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    app.run_polling()
+
+
+if __name__ == "__main__":
+    main()
