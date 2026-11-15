@@ -2,61 +2,91 @@
 
 English | [Español](README.es.md)
 
-**Manuel Broker** is a financial assistant for Telegram written in Python. It combines real-time market data (Yahoo Finance) with a **local AI model** (Ollama + Phi-3 Mini) to give quotes, asset comparisons, trend analysis and simple financial explanations — without sending anything to a cloud AI.
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?logo=python&logoColor=white)
+![python-telegram-bot](https://img.shields.io/badge/python--telegram--bot-22-229ED9.svg?logo=telegram&logoColor=white)
+![yfinance](https://img.shields.io/badge/yfinance-market%20data-00A86B.svg)
+![Ollama](https://img.shields.io/badge/Ollama-local%20AI-000000.svg)
+![Phi--3](https://img.shields.io/badge/Model-phi3%3Amini-8B5CF6.svg)
+![dotenv](https://img.shields.io/badge/dotenv-config-ECD53F.svg)
 
-## ✨ Features
+> **Status: educational project.** A Telegram financial assistant that keeps market data and AI inference on your machine — Yahoo Finance for quotes, Ollama for explanations.
 
-* **💰 Real-time prices:** stocks (Apple, Inditex…), indices (S&P 500, IBEX 35, Nasdaq), crypto (Bitcoin, Ethereum…), commodities (gold, silver) and EUR/USD.
-* **🥊 Asset comparison:** puts two assets head to head on relative daily performance.
-* **🔮 Hybrid trend analysis:** a math-based Bullish / Bearish / Sideways verdict from real data, plus a short AI comment.
-* **📖 AI financial dictionary:** explains financial terms in plain language and rejects non-financial topics.
-* **🌱 Passive-investing guide (Bogleheads):** diversification and long-term investing basics.
-* **🧠 Robustness:**
-  * **Alias map:** dozens of everyday names mapped to tickers (e.g. "Manzana" (Spanish for apple) → `AAPL`, "Zara" → `ITX.MC`, "Oro" → `GC=F`).
-  * **Typo handling:** if a ticker is not recognised, the AI suggests one and the bot asks for confirmation with inline buttons.
-  * **In-memory cache:** market data for 60 s and AI text for 300 s, to save calls to Yahoo and to the model.
-  * **Safe output:** `html.escape` on everything sent to the chat; answers wrapped in `<<< >>>` and temperature 0.0 to reduce hallucinations.
+**Manuel Broker** is a Python bot for Telegram. It combines real-time market data with a **local AI model** (Ollama + Phi-3 Mini) to deliver quotes, comparisons, trend analysis and plain-language financial definitions without sending user prompts to a cloud LLM.
 
-## 🛠️ Tech stack
+---
 
-| Area | Technology |
-|---|---|
-| Language | Python 3.10+ |
-| Bot framework | `python-telegram-bot` 22 (async, `Application`, command and callback handlers) |
-| Market data | `yfinance` |
-| Local AI | Ollama HTTP API (`http://localhost:11434/api/generate`), model `phi3:mini` |
-| Config | `python-dotenv` (`.env`) |
+## 🚀 Architecture and Tech Stack
 
-## 🏗️ Project structure
+The codebase is **modular**: `main.py` wires the Telegram `Application`, each command lives under `comandos/`, and shared logic (Yahoo, Ollama, cache, aliases, confirmations) sits in `cerebro.py`.
+
+| Layer | Technology |
+|------|------------|
+| **Runtime** | Python 3.10+ |
+| **Bot framework** | `python-telegram-bot` 22 — async `Application`, command and callback handlers |
+| **Market data** | `yfinance` (OHLC, daily change) |
+| **Local AI** | Ollama HTTP API (`http://localhost:11434/api/generate`), model `phi3:mini` |
+| **Configuration** | `python-dotenv` — `MANUELBROKER_TOKEN` in `.env` |
+| **Caching** | In-memory dict in `cerebro.py` — market data 60 s, AI text 300 s |
 
 ```
-manuel_bot/
-├── main.py            # Entry point: builds the Telegram Application and registers the handlers
-├── config.py          # Token from .env, Ollama URL and model, cache TTLs, alias → ticker map
-├── cerebro.py         # Core logic: Ollama calls, Yahoo data, cache, ticker guessing,
-│                      # financial-topic filter, confirmation flow and message formatting
-├── comandos/          # One module per command
-│   ├── start.py       # /start + interactive menu
-│   ├── precio.py      # /precio
-│   ├── comparar.py    # /comparar
-│   ├── tendencia.py   # /tendencia
-│   ├── explica.py     # /explica
-│   ├── invertir.py    # /como_invertir
-│   ├── ayuda.py       # /ayuda
-│   └── callbacks.py   # Inline-button handler (menu and confirmations)
-└── requirements.txt
+┌──────────────┐   Telegram API    ┌─────────────────────────────────────┐
+│  User chat   │ ◄────────────────► │  main.py + comandos/ (handlers)     │
+└──────────────┘                   └──────────────────┬──────────────────┘
+                                                    │
+                         ┌──────────────────────────▼──────────────────────────┐
+                         │  cerebro.py — aliases, cache, confirmations, format │
+                         └─────────────┬───────────────────────┬─────────────┘
+                                       │                       │
+                            ┌──────────▼──────────┐   ┌──────────▼──────────┐
+                            │  Yahoo (yfinance)   │   │  Ollama (phi3:mini) │
+                            └─────────────────────┘   └─────────────────────┘
 ```
 
-## 🚀 Installation
+---
 
-### 1. Clone the repository
+## ✨ Key Features
+
+| Feature | What it does |
+|---------|----------------|
+| **Real-time prices** | Stocks, indices, crypto, commodities and EUR/USD via alias map (e.g. "Manzana" → `AAPL`, "Oro" → `GC=F`). |
+| **Asset comparison** | Head-to-head daily performance for two tickers or aliases. |
+| **Hybrid trend** | Math-based Bullish / Bearish / Sideways from price action, plus a short AI comment. |
+| **Financial dictionary** | `/explica` defines terms with AI; non-financial topics are rejected. |
+| **Passive investing guide** | `/como_invertir` — Bogleheads-style basics. |
+| **Typo recovery** | Unknown tickers trigger an AI suggestion and inline confirmation buttons. |
+| **Safe chat output** | `html.escape` on bot messages; AI replies use `<<< >>>` wrappers and temperature `0.0`. |
+
+---
+
+## ⚙️ Prerequisites
+
+| Tool | Notes |
+|------|--------|
+| **Python** | 3.10 or newer |
+| **Ollama** | Running locally; pull model `phi3:mini` |
+| **Telegram bot token** | From [@BotFather](https://t.me/BotFather) |
+| **Internet** | For Telegram and Yahoo Finance (not for cloud AI) |
+
+---
+
+## 📦 Installation and Startup
+
+### Step 0 · Environment variables (required)
+
+Create **`.env` in the repository root** (listed in `.gitignore`):
+
+```env
+MANUELBROKER_TOKEN=YOUR_TOKEN_FROM_BOTFATHER
+```
+
+### Step 1 · Clone the repository
 
 ```bash
 git clone https://github.com/Supertocho80/manuel_bot.git
 cd manuel_bot
 ```
 
-### 2. Create a virtual environment and install dependencies
+### Step 2 · Virtual environment and dependencies
 
 ```bash
 python -m venv venv
@@ -65,45 +95,73 @@ source venv/bin/activate        # Linux / macOS
 pip install -r requirements.txt
 ```
 
-### 3. Install Ollama and the model
+### Step 3 · Ollama and the model
 
 ```bash
 ollama pull phi3:mini
-ollama serve                    # if it is not already running
+ollama serve                    # if not already running
 ```
 
-### 4. Environment variables
-
-Create a `.env` file in the project root (keep it out of Git):
-
-```env
-MANUELBROKER_TOKEN=YOUR_TOKEN_FROM_BOTFATHER
-```
-
-### 5. Run the bot
+### Step 4 · Run the bot
 
 ```bash
 python main.py
 ```
 
-## 🎮 Commands
+---
 
-The bot talks in Spanish, so command names are in Spanish.
+## 📖 Usage Guide
+
+The bot speaks **Spanish** in the chat; command names are Spanish.
+
+### Commands
 
 | Command | Example | Description |
 | --- | --- | --- |
 | `/start` | `/start` | Starts the bot and shows the interactive menu. |
 | `/precio` | `/precio Apple` | Current price and percentage change. |
-| `/comparar` | `/comparar BTC Oro` | Compares the daily performance of two assets ("Oro" = gold). |
+| `/comparar` | `/comparar BTC Oro` | Compares daily performance of two assets ("Oro" = gold). |
 | `/explica` | `/explica Warrants` | AI definition of a financial term. |
 | `/tendencia` | `/tendencia Tesla` | Bullish / bearish / sideways trend + AI comment. |
 | `/como_invertir` | `/como_invertir` | Basic guide to the Bogleheads philosophy. |
 | `/ayuda` | `/ayuda` | Quick list of commands. |
 
-## ⚠️ Disclaimer
+### Interactive menu
 
-Educational project. Nothing the bot says is investment advice.
+`/start` and inline buttons shortcut common actions (e.g. BTC price, IBEX trend, help). Callback routing is handled in `comandos/callbacks.py`.
 
 ---
+
+## ⚠️ Disclaimer
+
+Educational project only. Nothing the bot says is investment advice.
+
+---
+
+## 📁 Repository Structure
+
+```
+manuel_bot/
+├── .env                          # Telegram token (not versioned)
+├── .gitignore                    # Ignores .env
+├── main.py                       # Entry point: Application + handler registration
+├── config.py                     # TOKEN, Ollama URL/model, cache TTLs, MAPA_ACTIVOS
+├── cerebro.py                    # Ollama + Yahoo, cache, aliases, confirmations, HTML output
+├── requirements.txt              # Pinned Python dependencies
+└── comandos/                     # One module per Telegram command
+    ├── __init__.py               # Package marker
+    ├── start.py                  # /start + main inline keyboard
+    ├── precio.py                 # /precio
+    ├── comparar.py               # /comparar
+    ├── tendencia.py              # /tendencia
+    ├── explica.py                # /explica
+    ├── invertir.py               # /como_invertir
+    ├── ayuda.py                  # /ayuda
+    └── callbacks.py              # Inline-button handler (menu + ticker confirmations)
+```
+
+---
+
+**Manuel Broker** · Real-time quotes, local AI and Telegram — without shipping your questions to the cloud.
 
 Made with 🐍 Python, ❤️ and coffee.
